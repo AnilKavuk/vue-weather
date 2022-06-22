@@ -1,4 +1,4 @@
-# vue-weather
+# Vue with weather
 
 Weather project made using OpenWeather api with Vue.js
 
