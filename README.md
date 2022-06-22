@@ -1,24 +1,6 @@
 # vue-weather
 
-## Project setup
-```
-npm install
-```
+Weather project made using OpenWeather api with Vue.js
 
-### Compiles and hot-reloads for development
-```
-npm run serve
-```
-
-### Compiles and minifies for production
-```
-npm run build
-```
-
-### Lints and fixes files
-```
-npm run lint
-```
-
-### Customize configuration
-See [Configuration Reference](https://cli.vuejs.org/config/).
+![cold-weather](https://user-images.githubusercontent.com/36512716/175110837-003c4a7b-4713-4b67-9358-ecee9a087278.png)
+![warm-weather](https://user-images.githubusercontent.com/36512716/175110849-72277c69-02a2-4541-8735-77ebd4dad61e.png)
