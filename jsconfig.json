@@ -1,19 +1,22 @@
 {
   "compilerOptions": {
-    "target": "es5",
-    "module": "esnext",
+    "target": "ES2022",
+    "module": "ESNext",
     "baseUrl": "./",
-    "moduleResolution": "node",
+    "moduleResolution": "Bundler",
     "paths": {
       "@/*": [
         "src/*"
       ]
     },
     "lib": [
-      "esnext",
-      "dom",
-      "dom.iterable",
-      "scripthost"
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
     ]
-  }
+  },
+  "exclude": [
+    "dist",
+    "node_modules"
+  ]
 }

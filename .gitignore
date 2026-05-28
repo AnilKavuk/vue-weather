@@ -4,6 +4,9 @@ node_modules
 
 
 # local env files
+.env
+.env.*
+!.env.example
 .env.local
 .env.*.local
 
@@ -12,7 +15,9 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
-
+.codex-*.out
+.codex-*.err
+AGENTS.md
 # Editor directories and files
 .idea
 .vscode

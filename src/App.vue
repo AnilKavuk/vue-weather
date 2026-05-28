@@ -1,185 +1,267 @@
 <template>
-  <div id="app" :class="typeof weather.main != 'undefined' && weather.main.temp > 16 ? 'warm' : ''">
+  <div id="app" :class="{ warm: isWarm }">
     <main>
-      <div class="search-box">
-        <input type="text" class="search-bar" placeholder="Search..." v-model="query" @keypress="fetchWeather" />
+      <form class="search-box" @submit.prevent="fetchWeather">
+        <input
+          v-model.trim="query"
+          type="search"
+          class="search-bar"
+          placeholder="Şehir ara..."
+          autocomplete="off"
+          :disabled="loading"
+        />
+        <button class="search-button" type="submit" :disabled="loading || !query">
+          {{ loading ? 'Aranıyor' : 'Ara' }}
+        </button>
+      </form>
 
-      </div>
+      <p v-if="message" class="status">{{ message }}</p>
 
-      <div class="weather-wrap" v-if="typeof weather.main !='undefined'">
+      <div v-if="hasWeather" class="weather-wrap">
         <div class="location-box">
           <div class="location">{{ weather.name }}, {{ weather.sys.country }}</div>
-          <div class="date"> {{dateBuilder()}} </div>
+          <div class="date">{{ formattedDate }}</div>
         </div>
 
         <div class="weather-box">
-          <div class="temp">{{Math.round(weather.main.temp)}}°C</div>
-          <div class="weather">{{weather.weather[0].main}}</div>
+          <div class="temp">{{ roundedTemp }}&deg;C</div>
+          <div class="weather">{{ weather.weather[0].description || weather.weather[0].main }}</div>
         </div>
-
       </div>
     </main>
   </div>
 </template>
 
 <script>
-
+const OPENWEATHER_API_KEY = import.meta.env.VITE_OPENWEATHER_API_KEY
+const WEATHER_API_URL = 'https://api.openweathermap.org/data/2.5/weather'
 
 export default {
-  name: 'app',
+  name: 'App',
   data() {
     return {
-      api_key:'be399ed86e72b8765b0425a4656890f2',
-      url_base: 'https://api.openweathermap.org/data/2.5/',
       query: '',
-      weather: {}
+      weather: null,
+      loading: false,
+      message: OPENWEATHER_API_KEY ? '' : 'OpenWeather API anahtarı eksik.',
     }
   },
-
+  computed: {
+    hasWeather() {
+      return Boolean(this.weather?.main && this.weather?.sys && this.weather?.weather?.length)
+    },
+    isWarm() {
+      return this.hasWeather && this.weather.main.temp > 16
+    },
+    roundedTemp() {
+      return this.hasWeather ? Math.round(this.weather.main.temp) : ''
+    },
+    formattedDate() {
+      return new Intl.DateTimeFormat('tr-TR', {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+      }).format(new Date())
+    },
+  },
   methods: {
-    fetchWeather(e) {
-      if (e.key == "Enter") {
-        fetch(`${this.url_base}weather?q=${this.query}&units=metric&APPID=${this.api_key}&lang=tr`)
-          .then(res => {
-            return res.json();
-          }).then(this.setResults);
+    async fetchWeather() {
+      const city = this.query.trim()
+
+      if (!city) {
+        return
+      }
+
+      if (!OPENWEATHER_API_KEY) {
+        this.message = 'OpenWeather API anahtarı eksik.'
+        return
+      }
+
+      this.loading = true
+      this.message = ''
+
+      try {
+        const params = new URLSearchParams({
+          q: city,
+          units: 'metric',
+          appid: OPENWEATHER_API_KEY,
+          lang: 'tr',
+        })
+        const response = await fetch(`${WEATHER_API_URL}?${params.toString()}`)
+        const results = await response.json()
+
+        if (!response.ok) {
+          throw new Error(results.message || 'Hava durumu alınamadı.')
+        }
+
+        this.weather = results
+      } catch (error) {
+        this.weather = null
+        this.message = error instanceof Error ? error.message : 'Hava durumu alınamadı.'
+      } finally {
+        this.loading = false
       }
     },
-    setResults(results) {
-      this.weather = results;
-      console.log(this.weather);
-    },
-
-    dateBuilder() {
-      let d = new Date();
-      let months = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"];
-      let days = ["Pazar", "Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi"];
-
-      let day = days[d.getDay()];
-      let date = d.getDate();
-      let month = months[d.getMonth()];
-      let year = d.getFullYear();
-
-      return `${day} ${date} ${month} ${year}`
-    }
-  }
- 
+  },
 }
 </script>
 
 <style>
-  *{
-    margin:0;
-    padding:0;
-    box-sizing:border-box;
-    
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: Montserrat, Arial, sans-serif;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+#app {
+  min-width: 100%;
+  min-height: 100vh;
+  background-image: url('./assets/cold-bg.jpeg');
+  background-image: image-set(
+    url('./assets/cold-bg.avif') type('image/avif'),
+    url('./assets/cold-bg.jpeg') type('image/jpeg')
+  );
+  background-position: bottom;
+  background-size: cover;
+  transition: 0.4s;
+}
+
+#app.warm {
+  background-image: url('./assets/warm-bg.jpeg');
+  background-image: image-set(
+    url('./assets/warm-bg.avif') type('image/avif'),
+    url('./assets/warm-bg.jpeg') type('image/jpeg')
+  );
+}
+
+main {
+  min-height: 100vh;
+  padding: 25px;
+  background-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.25), rgba(0, 0, 0, 0.75));
+}
+
+.search-box {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  width: min(100%, 720px);
+  margin: 0 auto 30px;
+}
+
+.search-bar {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  padding: 15px;
+  color: #313131;
+  font-size: 20px;
+  appearance: none;
+  border: none;
+  border-radius: 0 16px;
+  outline: none;
+  background: rgba(255, 255, 255, 0.25);
+  box-shadow: 0 0 8px rgba(0, 0, 0, 0.25);
+  transition: 0.4s;
+}
+
+.search-bar:focus {
+  border-radius: 16px 0;
+  background-color: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 0 16px rgba(0, 0, 0, 0.25);
+}
+
+.search-button {
+  min-width: 92px;
+  padding: 0 18px;
+  color: #111827;
+  font-weight: 700;
+  border: none;
+  border-radius: 0 16px;
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 0 8px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+.search-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.status {
+  width: min(100%, 720px);
+  margin: 0 auto 24px;
+  color: #fff;
+  font-size: 18px;
+  font-weight: 600;
+  text-align: center;
+  text-shadow: 1px 2px rgba(0, 0, 0, 0.25);
+}
+
+.location-box .location {
+  color: #fff;
+  font-size: 32px;
+  font-weight: 500;
+  text-align: center;
+  text-shadow: 1px 3px rgba(0, 0, 0, 0.25);
+}
+
+.location-box .date {
+  color: #fff;
+  font-size: 20px;
+  font-style: italic;
+  font-weight: 300;
+  text-align: center;
+}
+
+.weather-box {
+  text-align: center;
+}
+
+.weather-box .temp {
+  display: inline-block;
+  max-width: 100%;
+  margin: 30px 0;
+  padding: 10px 25px;
+  color: #fff;
+  font-size: clamp(70px, 14vw, 102px);
+  font-weight: 900;
+  background-color: rgba(255, 255, 255, 0.25);
+  border-radius: 16px;
+  box-shadow: 3px 6px rgba(0, 0, 0, 0.25);
+  text-shadow: 3px 6px rgba(0, 0, 0, 0.25);
+}
+
+.weather-box .weather {
+  color: #fff;
+  font-size: clamp(34px, 8vw, 48px);
+  font-style: italic;
+  font-weight: 900;
+  text-transform: capitalize;
+  text-shadow: 3px 6px rgba(0, 0, 0, 0.25);
+}
+
+@media (max-width: 520px) {
+  main {
+    padding: 18px;
   }
 
-  body{
-    font-family:'montserrat', sans-serif; 
-  
+  .search-box {
+    grid-template-columns: 1fr;
   }
 
-  #app{
-    background-image: url('./assets/cold-bg.jpeg');
-    background-size: cover;
-    background-position: bottom;
-    transition:.4s;
-    min-width: 100%;
+  .search-button {
+    min-height: 48px;
   }
-
-  #app.warm{
-    background-image: url('./assets/warm-bg.jpeg');
-    
-  }
-
-  main{
-
-    min-height: 100vh;
-    padding:25px;
-
-    background-image: linear-gradient(to bottom, rgba(0,0,0,.25), rgba(0,0,0,.75) );
-  }
-
-  .search-box{
-
-    width: 100%;
-    margin-bottom: 30px ;
-
-    }
-
-    .search-box .search-bar{
-      display: block;
-      width: 100%;
-      padding: 15px;
-      
-      color: #313131;
-      font-size: 20px;
-      
-
-      appearance: none;
-      border: none;
-      outline: none;
-      background: none;
-
-      box-shadow: 0px 0px 8px rgba(0, 0, 0, .25);
-      background-color: rgba(255, 255, 255, .15);
-      border-radius: 0px 16px 0px 16px;
-      transition: .4s;
-
-    }
-
-  .search-box .search-bar:focus{
-    box-shadow: 0px 0px 16px rgba(0, 0, 0, .25);
-    background-color: rgba(255, 255, 255, .75);
-    border-radius: 16px 0px 16px 0px;
-  }
-
-  .location-box .location{
-    color:#fff;
-    font-size: 32px;
-    font-weight: 500;
-    text-align: center;
-    text-shadow: 1px 3px rgba(0, 0, 0, .25);
-  }
-
-  .location-box .date{
-    color: #fff;
-    font-size: 20px;
-    font-weight: 300;
-    font-style: italic;
-    text-align: center;
-  }
-
-  .weather-box{
-    text-align: center;
-  }
-
-  .weather-box .temp{
-    display: inline-block;
-    padding: 10px 25px;
-    color:#fff;
-    font-size: 102px;
-    font-weight: 900;
-
-    text-shadow: 3px 6px rgba(0, 0, 0, .25);
-    background-color:rgba(255, 255, 255, .25);
-    border-radius: 16px;
-    margin: 30px 0px;
-
-    box-shadow: 3px 6px rgba(0, 0, 0, .25);
-    
-  }
-
-
-  .weather-box .weather{
-    color:#fff;
-    font-size: 48px;
-    font-weight: 900;
-    font-style: italic;
-    text-shadow: 3px 6px rgba(0, 0, 0, .25);
-  }
-
-
-
+}
 </style>
