@@ -28,5 +28,6 @@ AGENTS.md
 *.sw?
 
 # Build artifacts
+# Prevent npm package archives and tarballs from being committed
 *.tgz
-# Remove local .tgz package archives
+*.tar.gz
