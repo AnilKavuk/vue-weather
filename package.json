@@ -11,7 +11,9 @@
     "build": "vite build",
     "optimize:images": "node scripts/optimize-images.mjs",
     "preview": "vite preview",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "start": "node server.js",
+    "server": "node server.js"
   },
   "dependencies": {
     "serve": "^14.2.6",
@@ -19,11 +21,11 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "@vitejs/plugin-vue": "^6.0.7",
+    "@vitejs/plugin-vue": "^6.0.8",
     "eslint": "^10.4.0",
     "eslint-plugin-vue": "^10.9.1",
     "globals": "^17.6.0",
     "sharp": "^0.34.5",
-    "vite": "^8.0.14"
+    "vite": "6.4.3"
   }
 }

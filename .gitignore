@@ -26,3 +26,8 @@ AGENTS.md
 *.njsproj
 *.sln
 *.sw?
+
+# Build artifacts
+# Prevent npm package archives and tarballs from being committed
+*.tgz
+*.tar.gz
