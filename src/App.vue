@@ -33,8 +33,8 @@
 </template>
 
 <script>
-const OPENWEATHER_API_KEY = import.meta.env.VITE_OPENWEATHER_API_KEY
-const WEATHER_API_URL = 'https://api.openweathermap.org/data/2.5/weather'
+// Uses server-side proxy (server.js) to protect API key
+const WEATHER_API_URL = '/api/weather'
 
 export default {
   name: 'App',
@@ -43,7 +43,7 @@ export default {
       query: '',
       weather: null,
       loading: false,
-      message: OPENWEATHER_API_KEY ? '' : 'OpenWeather API anahtarı eksik.',
+      message: '',
     }
   },
   computed: {
@@ -73,11 +73,6 @@ export default {
         return
       }
 
-      if (!OPENWEATHER_API_KEY) {
-        this.message = 'OpenWeather API anahtarı eksik.'
-        return
-      }
-
       this.loading = true
       this.message = ''
 
@@ -85,7 +80,6 @@ export default {
         const params = new URLSearchParams({
           q: city,
           units: 'metric',
-          appid: OPENWEATHER_API_KEY,
           lang: 'tr',
         })
         const response = await fetch(`${WEATHER_API_URL}?${params.toString()}`)
