@@ -41,6 +41,7 @@ npm run lint
 - The API key is kept server-side via the proxy (server.js)
 - Never commit real API keys to version control
 - Use `.env.local` for local development keys (it's in .gitignore)
+- `.tgz` files are ignored to prevent package archives from being committed
 - If a key was previously exposed in git history, rotate it in OpenWeather
 
 ![cold-weather](https://user-images.githubusercontent.com/36512716/175110837-003c4a7b-4713-4b67-9358-ecee9a087278.png)
