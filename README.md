@@ -4,11 +4,13 @@ Weather project made using OpenWeather API with Vue.js and Vite.
 
 ## Setup
 
-1. Create a `.env` file and add your OpenWeather API key:
+1. Copy `.env.example` to `.env.local` and add your OpenWeather API key:
 
 ```env
 OPENWEATHER_API_KEY=your_openweather_key
 ```
+
+The proxy server loads `.env.local` automatically. Restart it after changing the key.
 
 2. Install dependencies:
 

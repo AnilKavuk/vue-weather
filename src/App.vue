@@ -83,10 +83,32 @@ export default {
           lang: 'tr',
         })
         const response = await fetch(`${WEATHER_API_URL}?${params.toString()}`)
-        const results = await response.json()
+        const responseText = await response.text()
+        let results = null
+
+        if (responseText) {
+          try {
+            results = JSON.parse(responseText)
+          } catch {
+            if (response.ok) {
+              throw new Error('Hava durumu servisi geçersiz bir yanıt döndürdü.')
+            }
+          }
+        }
 
         if (!response.ok) {
-          throw new Error(results.message || 'Hava durumu alınamadı.')
+          const statusMessages = {
+            401: 'Geçersiz OpenWeather API anahtarı.',
+            404: 'Şehir bulunamadı.',
+            429: 'OpenWeather API kullanım limiti aşıldı.',
+          }
+          const apiMessage = results?.message || results?.error
+
+          throw new Error(statusMessages[response.status] || apiMessage || 'Hava durumu alınamadı.')
+        }
+
+        if (!results) {
+          throw new Error('Hava durumu servisi boş bir yanıt döndürdü.')
         }
 
         this.weather = results
