@@ -1,90 +1,99 @@
-import { createServer } from 'http'
-import { existsSync } from 'node:fs'
-import { resolve } from 'node:path'
-import { loadEnvFile } from 'node:process'
+import { createReadStream, existsSync, statSync } from 'node:fs'
+import { createServer } from 'node:http'
+import { extname, join, resolve, sep } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
-for (const envFile of ['.env.local', '.env']) {
-  const envPath = resolve(envFile)
+const ROOT_DIR = fileURLToPath(new URL('.', import.meta.url))
+const DIST_DIR = join(ROOT_DIR, 'dist')
+const IS_PRODUCTION = process.argv.includes('--production')
 
-  if (existsSync(envPath)) {
-    loadEnvFile(envPath)
+if (!IS_PRODUCTION) {
+  process.env.NODE_ENV = 'development'
+}
+
+const vite = IS_PRODUCTION
+  ? null
+  : await Promise.all([import('vite'), import('@vitejs/plugin-vue')]).then(
+      ([{ createServer: createViteServer }, { default: vue }]) => createViteServer({
+        appType: 'spa',
+        configFile: false,
+        plugins: [vue()],
+        resolve: { alias: { '@': join(ROOT_DIR, 'src') } },
+        root: ROOT_DIR,
+        server: { middlewareMode: true },
+      }),
+    )
+
+const contentTypes = {
+  '.avif': 'image/avif',
+  '.css': 'text/css; charset=utf-8',
+  '.html': 'text/html; charset=utf-8',
+  '.ico': 'image/x-icon',
+  '.jpeg': 'image/jpeg',
+  '.jpg': 'image/jpeg',
+  '.js': 'text/javascript; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.png': 'image/png',
+  '.svg': 'image/svg+xml',
+  '.webp': 'image/webp',
+}
+
+function sendJson(response, status, body) {
+  response.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' })
+  response.end(JSON.stringify(body))
+}
+
+function serveProductionFile(requestUrl, response) {
+  let pathname
+
+  try {
+    pathname = decodeURIComponent(requestUrl.pathname)
+  } catch {
+    sendJson(response, 400, { message: 'Geçersiz istek.' })
+    return
   }
-}
 
-const API_KEY = process.env.OPENWEATHER_API_KEY?.trim()
+  const requestedPath = resolve(DIST_DIR, `.${pathname}`)
+  const isSafePath = requestedPath === DIST_DIR || requestedPath.startsWith(`${DIST_DIR}${sep}`)
+  let filePath = isSafePath ? requestedPath : ''
 
-if (!API_KEY) {
-  console.error('Error: Add OPENWEATHER_API_KEY to .env.local before starting the API server')
-  process.exit(1)
-}
+  if (!filePath || !existsSync(filePath) || !statSync(filePath).isFile()) {
+    filePath = join(DIST_DIR, 'index.html')
+  }
 
-function sendJson(res, status, body) {
-  res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' })
-  res.end(JSON.stringify(body))
+  if (!existsSync(filePath)) {
+    sendJson(response, 503, { message: 'Uygulama derlenmemiş. Önce npm run build komutunu çalıştırın.' })
+    return
+  }
+
+  response.writeHead(200, {
+    'Content-Type': contentTypes[extname(filePath).toLowerCase()] || 'application/octet-stream',
+  })
+
+  if (requestUrl.method === 'HEAD') {
+    response.end()
+    return
+  }
+
+  createReadStream(filePath).pipe(response)
 }
 
 const server = createServer(async (req, res) => {
   const requestUrl = new URL(req.url, 'http://localhost')
   const pathname = requestUrl.pathname
 
-  if (pathname === '/api/weather' && req.method === 'GET') {
-    const city = requestUrl.searchParams.get('q')
-    const units = requestUrl.searchParams.get('units')
-    const lang = requestUrl.searchParams.get('lang')
-
-    if (!city) {
-      sendJson(res, 400, { message: 'Şehir parametresi gerekli.' })
-      return
-    }
-
-    try {
-      const weatherParams = new URLSearchParams({
-        q: city,
-        units: units || 'metric',
-        appid: API_KEY,
-        lang: lang || 'tr',
-      })
-      const weatherUrl = `https://api.openweathermap.org/data/2.5/weather?${weatherParams.toString()}`
-
-      const response = await fetch(weatherUrl)
-      const responseText = await response.text()
-      let data = null
-
-      if (responseText) {
-        try {
-          data = JSON.parse(responseText)
-        } catch {
-          // The client always receives JSON, even if the upstream service does not.
-        }
-      }
-
-      if (!response.ok) {
-        const statusMessages = {
-          401: 'Geçersiz OpenWeather API anahtarı.',
-          404: 'Şehir bulunamadı.',
-          429: 'OpenWeather API kullanım limiti aşıldı.',
-        }
-        const message = statusMessages[response.status] || data?.message || 'Hava durumu alınamadı.'
-
-        sendJson(res, response.status, { message })
-        return
-      }
-
-      if (!data) {
-        sendJson(res, 502, { message: 'OpenWeather geçersiz veya boş bir yanıt döndürdü.' })
-        return
-      }
-
-      sendJson(res, response.status, data)
-    } catch {
-      sendJson(res, 502, { message: 'OpenWeather servisine bağlanılamadı.' })
-    }
-  } else {
+  if (pathname.startsWith('/api/')) {
     sendJson(res, 404, { message: 'Endpoint bulunamadı.' })
+  } else if (vite) {
+    vite.middlewares(req, res)
+  } else if (req.method === 'GET' || req.method === 'HEAD') {
+    serveProductionFile({ pathname, method: req.method }, res)
+  } else {
+    sendJson(res, 405, { message: 'Desteklenmeyen istek metodu.' })
   }
 })
 
 const PORT = process.env.PORT || 3000
 server.listen(PORT, () => {
-  console.log(`Weather API proxy running on port ${PORT}`)
+  console.log(`Vue Weather ${IS_PRODUCTION ? 'production' : 'development'} server: http://localhost:${PORT}`)
 })
