@@ -33,8 +33,9 @@
 </template>
 
 <script>
-// Uses server-side proxy (server.js) to protect API key
-const WEATHER_API_URL = '/api/weather'
+import { fetchCurrentWeather } from '../weather-api.js'
+
+const OPENWEATHER_API_KEY = import.meta.env.VITE_OPENWEATHER_API_KEY
 
 export default {
   name: 'App',
@@ -77,41 +78,7 @@ export default {
       this.message = ''
 
       try {
-        const params = new URLSearchParams({
-          q: city,
-          units: 'metric',
-          lang: 'tr',
-        })
-        const response = await fetch(`${WEATHER_API_URL}?${params.toString()}`)
-        const responseText = await response.text()
-        let results = null
-
-        if (responseText) {
-          try {
-            results = JSON.parse(responseText)
-          } catch {
-            if (response.ok) {
-              throw new Error('Hava durumu servisi geçersiz bir yanıt döndürdü.')
-            }
-          }
-        }
-
-        if (!response.ok) {
-          const statusMessages = {
-            401: 'Geçersiz OpenWeather API anahtarı.',
-            404: 'Şehir bulunamadı.',
-            429: 'OpenWeather API kullanım limiti aşıldı.',
-          }
-          const apiMessage = results?.message || results?.error
-
-          throw new Error(statusMessages[response.status] || apiMessage || 'Hava durumu alınamadı.')
-        }
-
-        if (!results) {
-          throw new Error('Hava durumu servisi boş bir yanıt döndürdü.')
-        }
-
-        this.weather = results
+        this.weather = await fetchCurrentWeather(city, { apiKey: OPENWEATHER_API_KEY })
       } catch (error) {
         this.weather = null
         this.message = error instanceof Error ? error.message : 'Hava durumu alınamadı.'
