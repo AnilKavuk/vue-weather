@@ -1,23 +1,9 @@
-import js from '@eslint/js'
-import globals from 'globals'
-import vue from 'eslint-plugin-vue'
+import { defineConfig, globalIgnores } from 'eslint/config'
+import nextVitals from 'eslint-config-next/core-web-vitals'
+import nextTypeScript from 'eslint-config-next/typescript'
 
-export default [
-  {
-    ignores: ['dist/**', 'node_modules/**'],
-  },
-  js.configs.recommended,
-  ...vue.configs['flat/essential'],
-  {
-    files: ['**/*.{js,mjs,vue}'],
-    languageOptions: {
-      ecmaVersion: 'latest',
-      sourceType: 'module',
-      globals: {
-        ...globals.browser,
-        ...globals.node,
-        console: 'readonly',
-      },
-    },
-  },
-]
+export default defineConfig([
+  ...nextVitals,
+  ...nextTypeScript,
+  globalIgnores(['.next/**', 'out/**', 'dist/**', '.npm-cache/**', 'next-env.d.ts']),
+])
