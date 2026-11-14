@@ -1,5 +1,5 @@
 {
-  "name": "vue-weather",
+  "name": "next-weather",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -7,26 +7,29 @@
     "node": ">=22.12.0"
   },
   "scripts": {
-    "dev": "node server.js",
-    "serve": "node server.js",
-    "build": "vite build",
+    "dev": "next dev",
+    "serve": "next dev",
+    "build": "next build",
     "optimize:images": "node scripts/optimize-images.mjs",
-    "preview": "node server.js --production",
+    "preview": "next start",
     "lint": "eslint .",
-    "start": "node server.js --production",
-    "test": "node --test"
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "test": "node --experimental-strip-types --conditions=react-server --test test/weather-api.test.ts"
   },
   "dependencies": {
-    "serve": "^14.2.6",
-    "vue": "^3.5.35"
+    "@types/node": "^22.19.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "next": "^16.4.6",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "server-only": "^0.0.1",
+    "typescript": "~5.9.3"
   },
   "devDependencies": {
-    "@eslint/js": "^10.0.1",
-    "@vitejs/plugin-vue": "^6.0.8",
-    "eslint": "^10.4.0",
-    "eslint-plugin-vue": "^10.9.1",
-    "globals": "^17.6.0",
-    "sharp": "^0.34.5",
-    "vite": "6.4.3"
+    "eslint": "^9.39.1",
+    "eslint-config-next": "^16.4.6",
+    "sharp": "^0.34.5"
   }
 }

@@ -5,12 +5,12 @@ import sharp from 'sharp'
 
 const assets = [
   {
-    jpeg: 'src/assets/cold-bg.jpeg',
-    avif: 'src/assets/cold-bg.avif',
+    jpeg: 'public/images/cold-bg.jpeg',
+    avif: 'public/images/cold-bg.avif',
   },
   {
-    jpeg: 'src/assets/warm-bg.jpeg',
-    avif: 'src/assets/warm-bg.avif',
+    jpeg: 'public/images/warm-bg.jpeg',
+    avif: 'public/images/warm-bg.avif',
   },
 ]
 
