@@ -42,7 +42,7 @@ function parseWeather(data: unknown): WeatherData | null {
     return null
   }
 
-  // Only expose the fields rendered by the UI, never the raw provider payload.
+  // Yalnızca UI'ın kullandığı hava durumu alanlarını istemciye gönderiyoruz.
   return {
     name: data.name,
     country: data.sys.country,
@@ -54,6 +54,7 @@ function parseWeather(data: unknown): WeatherData | null {
 export async function POST(request: Request): Promise<Response> {
   let body: unknown
 
+  // İstemciden gelen JSON güvenilir değildir; alanları kullanmadan önce doğrula.
   try {
     body = await request.json()
   } catch {
@@ -70,14 +71,22 @@ export async function POST(request: Request): Promise<Response> {
     return json({ message: 'Şehir adı en fazla 100 karakter olabilir.' }, 400)
   }
 
-  const apiKey = process.env.OPENWEATHER_API_KEY?.trim()
-
-  if (!apiKey) {
-    return json({ message: 'Hava durumu servisi henüz yapılandırılmamış.' }, 503)
+  if (typeof body.lang !== 'string' || !/^[a-z]{2}(?:_[a-z]{2})?$/i.test(body.lang.trim())) {
+    return json({ message: 'Geçerli bir dil kodu gönderin (örneğin tr veya en).' }, 400)
   }
 
+  const lang = body.lang.trim().toLowerCase()
+
+  // NEXT_PUBLIC_ kullanılmaz. Bu değer yalnızca sunucuda, istek anında okunur.
+  const apiKey = process.env.VITE_OPENWEATHER_API_KEY?.trim()
+
+  if (!apiKey) {
+    return json({ message: 'Hava durumu servisi henüz yapılandırılmamış.' }, 500)
+  }
+
+  // URLSearchParams şehir ve dil değerlerini güvenli biçimde kodlar.
   const url = new URL(OPENWEATHER_URL)
-  url.search = new URLSearchParams({ q: city, units: 'metric', lang: 'tr', appid: apiKey }).toString()
+  url.search = new URLSearchParams({ q: city, units: 'metric', appid: apiKey, lang }).toString()
 
   try {
     const response = await fetch(url, {
@@ -86,27 +95,31 @@ export async function POST(request: Request): Promise<Response> {
       signal: AbortSignal.timeout(10_000),
     })
 
+    if (response.status === 400) {
+      return json({ message: 'Şehir veya dil parametresi geçersiz.' }, 400)
+    }
+
     if (response.status === 404) {
       return json({ message: 'Şehir bulunamadı.' }, 404)
     }
 
     if (response.status === 429) {
-      return json({ message: 'Hava durumu servisi kullanım limiti aşıldı. Lütfen daha sonra tekrar deneyin.' }, 429)
+      return json({ message: 'Hava durumu servisi kullanım limiti aşıldı. Lütfen daha sonra tekrar deneyin.' }, 500)
     }
 
     if (!response.ok) {
-      return json({ message: 'Hava durumu servisine şu anda erişilemiyor.' }, 502)
+      return json({ message: 'Hava durumu servisine şu anda erişilemiyor.' }, 500)
     }
 
     const weather = parseWeather(await response.json())
 
     if (!weather) {
-      return json({ message: 'Hava durumu servisinden geçersiz bir yanıt alındı.' }, 502)
+      return json({ message: 'Hava durumu servisinden geçersiz bir yanıt alındı.' }, 500)
     }
 
     return json(weather)
   } catch {
-    // Fetch errors may contain the upstream URL (including appid); never echo them.
-    return json({ message: 'Hava durumu servisine bağlanılamadı.' }, 502)
+    // Hata nesnesi API anahtarlı URL içerebilir; istemciye aktarma veya loglama.
+    return json({ message: 'Hava durumu servisine bağlanılamadı.' }, 500)
   }
 }

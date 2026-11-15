@@ -9,7 +9,8 @@ body {
 }
 
 button,
-input {
+input,
+select {
   font: inherit;
 }
 
@@ -62,6 +63,29 @@ main {
   background: rgba(255, 255, 255, 0.25);
   box-shadow: 0 0 8px rgba(0, 0, 0, 0.25);
   transition: 0.4s;
+}
+
+.language-field {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  color: #fff;
+  font-weight: 600;
+}
+
+.language-field select {
+  padding: 8px 12px;
+  color: #111827;
+  border: none;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.85);
+}
+
+.language-field select:focus-visible {
+  outline: 3px solid #fff;
+  outline-offset: 3px;
 }
 
 .search-bar:focus {

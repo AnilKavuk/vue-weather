@@ -5,23 +5,38 @@ import type { FormEvent } from 'react'
 
 type WeatherSearchProps = {
   loading: boolean
-  onSearch: (city: string) => Promise<void>
+  onSearch: (city: string, lang: string) => Promise<void>
 }
 
 export default function WeatherSearch({ loading, onSearch }: WeatherSearchProps) {
   const [query, setQuery] = useState('')
+  // Dil kodu da şehir adı gibi UI'dan backend'e gönderilir.
+  const [lang, setLang] = useState('tr')
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const city = query.trim()
 
     if (city && !loading) {
-      void onSearch(city)
+      void onSearch(city, lang)
     }
   }
 
   return (
     <form className="search-box" onSubmit={handleSubmit} role="search">
+      <div className="language-field">
+        <label htmlFor="lang">Hava durumu dili</label>
+        <select
+          id="lang"
+          name="lang"
+          value={lang}
+          onChange={(event) => setLang(event.target.value)}
+          disabled={loading}
+        >
+          <option value="tr">Türkçe</option>
+          <option value="en">English</option>
+        </select>
+      </div>
       <label className="sr-only" htmlFor="city">Şehir ara</label>
       <input
         id="city"
