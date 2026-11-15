@@ -4,7 +4,7 @@ import test, { afterEach, beforeEach, mock } from 'node:test'
 import { POST } from '../app/api/weather/route.ts'
 
 const serverKey = 'server-only-test-secret'
-const originalApiKey = process.env.OPENWEATHER_API_KEY
+const originalApiKey = process.env.VITE_OPENWEATHER_API_KEY
 const providerWeather = {
   main: { temp: 18.4 },
   name: 'Trabzon',
@@ -13,15 +13,15 @@ const providerWeather = {
 }
 
 beforeEach(() => {
-  process.env.OPENWEATHER_API_KEY = ` ${serverKey} `
+  process.env.VITE_OPENWEATHER_API_KEY = ` ${serverKey} `
 })
 
 afterEach(() => {
   mock.restoreAll()
   if (originalApiKey === undefined) {
-    delete process.env.OPENWEATHER_API_KEY
+    delete process.env.VITE_OPENWEATHER_API_KEY
   } else {
-    process.env.OPENWEATHER_API_KEY = originalApiKey
+    process.env.VITE_OPENWEATHER_API_KEY = originalApiKey
   }
 })
 
@@ -33,14 +33,14 @@ function weatherRequest(body: unknown) {
   })
 }
 
-test('POST proxies the trimmed city with the server key and returns only weather fields', async () => {
+test('POST proxies the trimmed city and UI language with the server key and returns only weather fields', async () => {
   const upstream = mock.method(globalThis, 'fetch', async () => Response.json({
     ...providerWeather,
     appid: serverKey,
     message: `https://api.openweathermap.org/?appid=${serverKey}`,
   }))
 
-  const response = await POST(weatherRequest({ city: ' Trabzon ', apiKey: 'browser-key' }))
+  const response = await POST(weatherRequest({ city: ' Trabzon ', lang: ' en ', apiKey: 'browser-key' }))
 
   assert.equal(response.status, 200)
   assert.equal(response.headers.get('cache-control'), 'no-store')
@@ -53,7 +53,7 @@ test('POST proxies the trimmed city with the server key and returns only weather
   assert.equal(url.origin + url.pathname, 'https://api.openweathermap.org/data/2.5/weather')
   assert.equal(url.searchParams.get('q'), 'Trabzon')
   assert.equal(url.searchParams.get('units'), 'metric')
-  assert.equal(url.searchParams.get('lang'), 'tr')
+  assert.equal(url.searchParams.get('lang'), 'en')
   assert.equal(url.searchParams.get('appid'), serverKey)
   assert.equal(new Headers(options?.headers).get('Accept'), 'application/json')
   assert.equal(options?.cache, 'no-store')
@@ -62,8 +62,8 @@ test('POST proxies the trimmed city with the server key and returns only weather
 
 test('the server key is read at request time, so a build-time value is unnecessary', async () => {
   const upstream = mock.method(globalThis, 'fetch', async () => Response.json(providerWeather))
-  process.env.OPENWEATHER_API_KEY = 'rotated-runtime-key'
-  const response = await POST(weatherRequest({ city: 'Trabzon' }))
+  process.env.VITE_OPENWEATHER_API_KEY = 'rotated-runtime-key'
+  const response = await POST(weatherRequest({ city: 'Trabzon', lang: 'tr' }))
   assert.equal(response.status, 200)
   assert.equal(new URL(String(upstream.mock.calls[0].arguments[0])).searchParams.get('appid'), 'rotated-runtime-key')
 })
@@ -71,19 +71,19 @@ test('the server key is read at request time, so a build-time value is unnecessa
 test('query characters in a city cannot replace the server API key', async () => {
   const upstream = mock.method(globalThis, 'fetch', async () => Response.json(providerWeather))
   const city = 'İstanbul &appid=browser-key'
-  await POST(weatherRequest({ city }))
+  await POST(weatherRequest({ city, lang: 'tr' }))
   const url = new URL(String(upstream.mock.calls[0].arguments[0]))
   assert.equal(url.searchParams.get('q'), city)
   assert.deepEqual(url.searchParams.getAll('appid'), [serverKey])
 })
 
-test('missing and blank server keys return 503 without an upstream request', async () => {
+test('missing and blank server keys return 500 without an upstream request', async () => {
   const upstream = mock.method(globalThis, 'fetch', async () => Response.json(providerWeather))
   for (const key of [undefined, '', '   ']) {
-    if (key === undefined) delete process.env.OPENWEATHER_API_KEY
-    else process.env.OPENWEATHER_API_KEY = key
-    const response = await POST(weatherRequest({ city: 'Ankara' }))
-    assert.equal(response.status, 503)
+    if (key === undefined) delete process.env.VITE_OPENWEATHER_API_KEY
+    else process.env.VITE_OPENWEATHER_API_KEY = key
+    const response = await POST(weatherRequest({ city: 'Ankara', lang: 'tr' }))
+    assert.equal(response.status, 500)
     assert.deepEqual(await response.json(), { message: 'Hava durumu servisi henüz yapılandırılmamış.' })
   }
   assert.equal(upstream.mock.callCount(), 0)
@@ -91,12 +91,36 @@ test('missing and blank server keys return 503 without an upstream request', asy
 
 test('invalid cities and non-object bodies return 400 without an upstream request', async () => {
   const upstream = mock.method(globalThis, 'fetch', async () => Response.json(providerWeather))
-  for (const body of [null, [], 'Ankara', {}, { city: 42 }, { city: [] }, { city: {} }, { city: '' }, { city: '   ' }, { city: 'a'.repeat(101) }]) {
+  for (const body of [
+    null, [], 'Ankara', { lang: 'tr' },
+    { city: 42, lang: 'tr' }, { city: [], lang: 'tr' }, { city: {}, lang: 'tr' },
+    { city: '', lang: 'tr' }, { city: '   ', lang: 'tr' }, { city: 'a'.repeat(101), lang: 'tr' },
+  ]) {
     const response = await POST(weatherRequest(body))
     assert.equal(response.status, 400, JSON.stringify(body))
     assert.equal(typeof (await response.json()).message, 'string')
   }
   assert.equal(upstream.mock.callCount(), 0)
+})
+
+test('missing or invalid languages return a Turkish 400 without an upstream request', async () => {
+  const upstream = mock.method(globalThis, 'fetch', async () => Response.json(providerWeather))
+  for (const lang of [undefined, null, 42, [], {}, '', '   ', 'english', 'en-US', 'tr&appid=browser-key']) {
+    const response = await POST(weatherRequest({ city: 'Ankara', lang }))
+    assert.equal(response.status, 400, JSON.stringify(lang))
+    assert.deepEqual(await response.json(), { message: 'Geçerli bir dil kodu gönderin (örneğin tr veya en).' })
+  }
+  assert.equal(upstream.mock.callCount(), 0)
+})
+
+test('language codes are normalized and regional OpenWeather codes are forwarded', async () => {
+  const upstream = mock.method(globalThis, 'fetch', async () => Response.json(providerWeather))
+  for (const [lang, expected] of [['tr', 'tr'], [' EN ', 'en'], ['pt_br', 'pt_br'], [' ZH_CN ', 'zh_cn']]) {
+    const response = await POST(weatherRequest({ city: 'Ankara', lang }))
+    assert.equal(response.status, 200)
+    const latestCall = upstream.mock.calls[upstream.mock.callCount() - 1]
+    assert.equal(new URL(String(latestCall.arguments[0])).searchParams.get('lang'), expected)
+  }
 })
 
 test('malformed JSON returns 400 without an upstream request', async () => {
@@ -107,10 +131,10 @@ test('malformed JSON returns 400 without an upstream request', async () => {
   assert.equal(upstream.mock.callCount(), 0)
 })
 
-for (const [providerStatus, status] of [[404, 404], [429, 429], [401, 502], [403, 502], [500, 502]]) {
+for (const [providerStatus, status] of [[400, 400], [404, 404], [429, 500], [401, 500], [403, 500], [500, 500]]) {
   test(`upstream ${providerStatus} returns ${status} without disclosing provider errors or credentials`, async () => {
     mock.method(globalThis, 'fetch', async () => Response.json({ message: `Provider error: appid=${serverKey}` }, { status: providerStatus }))
-    const response = await POST(weatherRequest({ city: 'Ankara' }))
+    const response = await POST(weatherRequest({ city: 'Ankara', lang: 'tr' }))
     assert.equal(response.status, status)
     const text = await response.text()
     assert.equal(text.includes(serverKey), false)
@@ -127,24 +151,24 @@ test('network errors and timeouts never expose the upstream URL or key', async (
     new DOMException(`appid=${serverKey}`, 'TimeoutError'),
   ]) {
     mock.method(globalThis, 'fetch', async () => { throw error })
-    const response = await POST(weatherRequest({ city: 'Ankara' }))
-    assert.equal(response.status, 502)
+    const response = await POST(weatherRequest({ city: 'Ankara', lang: 'tr' }))
+    assert.equal(response.status, 500)
     assert.deepEqual(await response.json(), { message: 'Hava durumu servisine bağlanılamadı.' })
   }
 })
 
-test('invalid or empty upstream JSON returns a safe 502', async () => {
+test('invalid or empty upstream JSON returns a safe 500', async () => {
   for (const body of ['', 'not json', 'null', '{}', JSON.stringify({ ...providerWeather, main: { temp: '18' } }), JSON.stringify({ ...providerWeather, weather: [] })]) {
     mock.method(globalThis, 'fetch', async () => new Response(body))
-    const response = await POST(weatherRequest({ city: 'Ankara' }))
-    assert.equal(response.status, 502)
+    const response = await POST(weatherRequest({ city: 'Ankara', lang: 'tr' }))
+    assert.equal(response.status, 500)
     assert.equal(typeof (await response.json()).message, 'string')
   }
 })
 
 test('the weather condition falls back to main when its description is unavailable', async () => {
   mock.method(globalThis, 'fetch', async () => Response.json({ ...providerWeather, weather: [{ main: 'Clear' }] }))
-  const response = await POST(weatherRequest({ city: 'Ankara' }))
+  const response = await POST(weatherRequest({ city: 'Ankara', lang: 'tr' }))
   assert.equal(response.status, 200)
   assert.equal((await response.json()).description, 'Clear')
 })

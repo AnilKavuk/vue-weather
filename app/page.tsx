@@ -12,15 +12,16 @@ export default function WeatherPage() {
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
 
-  async function fetchWeather(city: string) {
+  async function fetchWeather(city: string, lang: string) {
     setLoading(true)
     setMessage('')
 
     try {
+      // Tarayıcı yalnızca kendi backend'imize şehir ve dil gönderir; API anahtarı içermez.
       const response = await fetch('/api/weather', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ city }),
+        body: JSON.stringify({ city, lang }),
       })
 
       if (!response.ok) {
@@ -31,8 +32,9 @@ export default function WeatherPage() {
       }
 
       const data: WeatherData = await response.json()
+      // Başarılı JSON yanıtını state'e yazarak ekranda göster.
       setWeather(data)
-      setDate(new Intl.DateTimeFormat('tr-TR', {
+      setDate(new Intl.DateTimeFormat(lang === 'tr' ? 'tr-TR' : 'en-US', {
         weekday: 'long',
         day: 'numeric',
         month: 'long',
@@ -42,6 +44,7 @@ export default function WeatherPage() {
       setWeather(null)
       setMessage(error instanceof Error ? error.message : 'Hava durumu alınamadı.')
     } finally {
+      // İstek başarılı olsa da hata verse de yükleme durumunu kapat.
       setLoading(false)
     }
   }
@@ -51,7 +54,7 @@ export default function WeatherPage() {
       <main>
         <h1 className="sr-only">Hava durumu</h1>
         <WeatherSearch loading={loading} onSearch={fetchWeather} />
-        <p className="status" role="status">{message}</p>
+        <p className="status" role="status">{loading ? 'Hava durumu yükleniyor...' : message}</p>
         <div aria-live="polite" aria-busy={loading}>
           {weather && <WeatherDisplay weather={weather} date={date} />}
         </div>
