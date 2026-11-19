@@ -224,7 +224,7 @@ cloudflared tunnel --url http://localhost:3000
 
 ### 3.4 Docker Compose / Kubernetes Özel Kontroller
 ```yaml
-# docker-compose.yml örneği
+# compose.yaml örneği (projenin gerçek dosyası için bkz. 5.5)
 services:
   app:
     build: .
@@ -234,7 +234,8 @@ services:
       - PORT=3000            # Next.js PORT env'ini okur
       - VITE_OPENWEATHER_API_KEY=${VITE_OPENWEATHER_API_KEY}
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
+      # 127.0.0.1: `localhost` ::1'e çözülebilir, Next.js IPv4'e bind olur.
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -385,10 +386,10 @@ FROM node:22-alpine AS builder
 WORKDIR /app
 
 # Package files first (cache layer)
-COPY package*.json ./
+COPY package.json package-lock.json ./
 RUN npm ci --include=dev
 
-# Source copy
+# Source copy — host node_modules/.next/.env* icin .dockerignore'a bakin
 COPY . .
 
 # Build (standalone output üretir)
@@ -404,7 +405,8 @@ WORKDIR /app
 ENV NODE_ENV=production
 # Next.js PORT env'ini okur, default 3000
 ENV PORT=3000
-ENV HOSTNAME="0.0.0.0"
+ENV HOSTNAME=0.0.0.0
+ENV NEXT_TELEMETRY_DISABLED=1
 
 # Non-root user
 RUN addgroup --system --gid 1001 nodejs \
@@ -415,16 +417,29 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 
+# Next.js runtime'da .next/cache'e yazar; standalone cikti bu dizini icermez
+# ve container non-root calistigi icin dizin onceden olusturulmali.
+RUN mkdir -p .next/cache \
+    && chown nextjs:nodejs .next .next/cache
+
 USER nextjs
 
 EXPOSE 3000
 
-# Health check endpoint'i Next.js'e ekleyin (app/api/health/route.ts)
-HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:3000/api/health || exit 1
+# Health check endpoint: app/api/health/route.ts
+# Not: busybox wget `--no-verbose` / `--tries` bayraklarini desteklemez, bu yuzden
+# probe node'un global fetch'i ile yapiliyor. Ayrica `localhost` ::1'e cozulebilir,
+# Next.js ise IPv4'e bind oldugundan adres 127.0.0.1 olarak sabit.
+HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
+  CMD ["node", "-e", "fetch('http://127.0.0.1:' + (process.env.PORT || 3000) + '/api/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
 
 CMD ["node", "server.js"]
 ```
+
+> `.dockerignore` zorunludur: `COPY . .` satiri `npm ci`den sonra calistigi icin,
+> filtre olmadan host'un `node_modules`'u imajdaki Alpine kurulumunu ezer
+> (Windows/macOS binary'leri Linux imajinda) ve `.git`, `.next`, `.env.local`
+> imaja gomulur.
 
 ### 5.3 Health Check Endpoint (app/api/health/route.ts)
 ```typescript
@@ -483,7 +498,17 @@ http {
     server {
         listen 80;
         server_name vue-weather.flyingsycamore.com.tr;
-        return 301 https://$server_name$request_uri;
+
+        # Container healthcheck'i buraya düşer: redirect'ten muaf, TLS gerektirmez.
+        location /nginx-health {
+            access_log off;
+            return 200 "healthy\n";
+            add_header Content-Type text/plain;
+        }
+
+        location / {
+            return 301 https://$server_name$request_uri;
+        }
     }
     
     # HTTPS Server
@@ -539,10 +564,13 @@ http {
 }
 ```
 
-### 5.5 docker-compose.yml (Production)
+### 5.5 compose.yaml (Production)
+Dosya adi `compose.yaml`; `docker compose` bunu `docker-compose.yml`den once
+bulur, bu yuzden CI/sunucu tarafinda `-f` bayragi gerekmez.
+
 ```yaml
-# docker-compose.yml
-version: '3.8'
+# compose.yaml
+name: vue-weather
 
 services:
   app:
@@ -550,33 +578,31 @@ services:
       context: .
       dockerfile: Dockerfile
       target: runner
-    image: vue-weather:latest
+    # Registry'den deploy icin: APP_IMAGE=ghcr.io/<owner>/<repo> APP_TAG=<sha>
+    image: ${APP_IMAGE:-vue-weather}:${APP_TAG:-latest}
     container_name: vue-weather-app
     environment:
-      - NODE_ENV=production
-      - PORT=3000
-      - HOSTNAME=0.0.0.0
-      - VITE_OPENWEATHER_API_KEY=${VITE_OPENWEATHER_API_KEY}
-    expose:
-      - "3000"
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 15s
+      NODE_ENV: production
+      PORT: "3000"
+      HOSTNAME: 0.0.0.0
+      # `:?` ile tanimsiz anahtar `up` sirasinda hata verir; aksi halde bos
+      # string gecer ve hata ancak istek aninda 500 olarak gorunur.
+      VITE_OPENWEATHER_API_KEY: ${VITE_OPENWEATHER_API_KEY:?VITE_OPENWEATHER_API_KEY tanimli degil (.env dosyasina ekleyin)}
+    # nginx uygulamaya app-network uzerinden erisir; bu eslemenin tek amaci
+    # TLS/nginx devre disi kaldiginda sunucuda dogrudan tani yapabilmek.
+    ports:
+      - "127.0.0.1:3000:3000"
     networks:
       - app-network
     restart: unless-stopped
+    # Healthcheck imajda tanimli (Dockerfile HEALTHCHECK). Tek yerde tutuldu;
+    # boylece `docker run` ve CI smoke test de ayni probe'u kullanir.
     # Resource limits (production için önerilir)
     deploy:
       resources:
         limits:
           cpus: '1'
           memory: 512M
-        reservations:
-          cpus: '0.5'
-          memory: 256M
 
   nginx:
     image: nginx:alpine
@@ -595,10 +621,12 @@ services:
       - app-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost/nginx-health"]
+      # 80 portundaki /nginx-health, TLS ve redirect'e bagli olmayan tek probe.
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/nginx-health"]
       interval: 30s
       timeout: 5s
       retries: 3
+      start_period: 5s
 
 networks:
   app-network:
@@ -607,6 +635,13 @@ networks:
 volumes:
   nginx-cache:
 ```
+
+**Deploy oncesi iki zorunlu kosul:**
+1. `.env` dosyasinda `VITE_OPENWEATHER_API_KEY` tanimli (yoksa `up` hata verir).
+2. `./certs/fullchain.pem` ve `./certs/privkey.pem` mevcut. Bu dosyalar olmadan
+   nginx `ssl_certificate` satirinda ayaga kalkmaz; app healthy olsa bile
+   80/443'te dinleyen hicbir sey olmaz. Tani: `docker compose logs nginx` ve
+   `curl -f http://127.0.0.1:3000/api/health` (app portu localhost'a aciktir).
 
 ### 5.6 CI/CD Pipeline (GitHub Actions Örneği)
 ```yaml

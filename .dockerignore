@@ -1,0 +1,40 @@
+# Docker build context filtresi.
+#
+# KRITIK: host node_modules context'e girmemeli. Dockerfile'da `COPY . .`
+# `npm ci`den SONRA calistigi icin, filtre olmadan Alpine icin kurulan
+# paketler host'un (Windows/macOS) platforma ozel binary'leriyle ezilir.
+
+# Bagimliliklar ve build cikti
+node_modules
+.next
+out
+dist
+*.tsbuildinfo
+
+# Secret / local ayar — imaja asla girmemeli
+.env
+.env.*
+certs
+
+# VCS ve CI
+.git
+.gitignore
+.github
+
+# Docker dosyalari (build icin gerekmez)
+Dockerfile
+.dockerignore
+compose.yaml
+docker-compose.yml
+
+# Build'e girmeyen test, script ve dokumantasyon
+test
+scripts
+*.md
+
+# Editor / OS artifact
+.vscode
+.idea
+.DS_Store
+*.log
+npm-debug.log*
