@@ -1,0 +1,73 @@
+# compose.yaml
+# `docker compose` bu dosyayi docker-compose.yml'den once bulur; CI/sunucu
+# tarafinda ekstra -f bayragi gerekmez.
+#
+# Gereksinimler:
+#   - .env dosyasinda VITE_OPENWEATHER_API_KEY tanimli olmali (bkz. .env.example)
+#   - ./certs/{fullchain.pem,privkey.pem} mevcut olmali; nginx bu dosyalar
+#     olmadan ayaga kalkmaz (ssl_certificate) ve 80/443 dinleyen hicbir sey olmaz.
+
+name: vue-weather
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runner
+    # Registry'den deploy icin: APP_IMAGE=ghcr.io/<owner>/<repo> APP_TAG=<sha>
+    image: ${APP_IMAGE:-vue-weather}:${APP_TAG:-latest}
+    container_name: vue-weather-app
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      HOSTNAME: 0.0.0.0
+      # `:?` ile tanimsiz anahtar `up` sirasinda hata verir; aksi halde bos
+      # string gecer ve hata ancak istek aninda 500 olarak gorunur.
+      VITE_OPENWEATHER_API_KEY: ${VITE_OPENWEATHER_API_KEY:?VITE_OPENWEATHER_API_KEY tanimli degil (.env dosyasina ekleyin)}
+    # nginx uygulamaya app-network uzerinden erisir; bu eslemenin tek amaci
+    # TLS/nginx devre disi kaldiginda sunucuda dogrudan tani yapabilmek.
+    ports:
+      - "127.0.0.1:3000:3000"
+    networks:
+      - app-network
+    restart: unless-stopped
+    # Healthcheck imajda tanimli (Dockerfile HEALTHCHECK). Tek yerde tutuldu;
+    # boylece `docker run` ve CI smoke test de ayni probe'u kullanir.
+    # Resource limits (production için önerilir)
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+
+  nginx:
+    image: nginx:alpine
+    container_name: vue-weather-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./certs:/etc/nginx/certs:ro
+      - nginx-cache:/var/cache/nginx
+    depends_on:
+      app:
+        condition: service_healthy
+    networks:
+      - app-network
+    restart: unless-stopped
+    healthcheck:
+      # 80 portundaki /nginx-health, TLS ve redirect'e bagli olmayan tek probe.
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/nginx-health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  nginx-cache:
